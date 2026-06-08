@@ -1,6 +1,21 @@
 import { BookingForm } from "@/components/booking-form";
 
+const SUPPORT_WHATSAPP_FALLBACK = "+212612345678";
+
+function getSupportWhatsappUrl() {
+  const phoneNumber =
+    process.env.WHATSAPP_NUMBER ?? SUPPORT_WHATSAPP_FALLBACK;
+  const normalized = phoneNumber.replace(/[^\d]/g, "");
+  const message = encodeURIComponent(
+    "Bonjour Atlas Lavage, j'ai besoin d'aide avec ma réservation.",
+  );
+
+  return `https://wa.me/${normalized}?text=${message}`;
+}
+
 export default function Home() {
+  const supportWhatsappUrl = getSupportWhatsappUrl();
+
   return (
     <>
       <main className="page-shell">
@@ -26,7 +41,17 @@ export default function Home() {
           <BookingForm />
         </section>
       </main>
-      <footer>© 2026 Atlas Lavage — Tous droits réservés</footer>
+      <footer className="site-footer">
+        <span>© 2026 Atlas Lavage — Tous droits réservés</span>
+        <a
+          className="footer-whatsapp"
+          href={supportWhatsappUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          Support WhatsApp
+        </a>
+      </footer>
     </>
   );
 }

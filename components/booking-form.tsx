@@ -21,10 +21,10 @@ import {
 const STEP_LABELS = ["Voiture", "Pack", "Infos"];
 const TOTAL_STEPS = STEP_LABELS.length;
 const VEHICLE_IMAGES: Record<keyof typeof VEHICLES, string> = {
-  citadine: "/assets/vehicles/citadine.jpg",
-  berline: "/assets/vehicles/berline.jpg",
-  suv_4x4: "/assets/vehicles/suv-4x4.jpg",
-  utilitaire: "/assets/vehicles/utilitaire.jpg",
+  citadine: "/assets/vehicles/illustration-citadine.svg",
+  berline: "/assets/vehicles/illustration-berline.svg",
+  suv_4x4: "/assets/vehicles/illustration-suv-4x4.svg",
+  utilitaire: "/assets/vehicles/illustration-utilitaire.svg",
 };
 
 type FieldErrors = Partial<Record<keyof BookingPayload | "submit", string>>;
@@ -40,6 +40,7 @@ const initialForm: Partial<BookingPayload> = {
 export function BookingForm() {
   const [step, setStep] = useState(1);
   const [form, setForm] = useState<Partial<BookingPayload>>(initialForm);
+  const [customQuartier, setCustomQuartier] = useState("");
   const [errors, setErrors] = useState<FieldErrors>({});
   const [bookedSlots, setBookedSlots] = useState<TimeSlot[]>([]);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
@@ -50,9 +51,10 @@ export function BookingForm() {
     form.service && form.vehicle ? getPrice(form.service, form.vehicle) : null;
 
   const recap = useMemo(() => {
-    if (!isCompleteBooking(form)) return null;
-    return toSummary(form);
-  }, [form]);
+    const bookingForm = getBookingForm(form, customQuartier);
+    if (!isCompleteBooking(bookingForm)) return null;
+    return toSummary(bookingForm);
+  }, [customQuartier, form]);
 
   useEffect(() => {
     if (!form.date) return;
@@ -95,6 +97,20 @@ export function BookingForm() {
     setErrors((current) => ({ ...current, [key]: undefined, submit: undefined }));
   }
 
+  function updateQuartier(value: string) {
+    update("quartier", value);
+    if (value !== "Autre") setCustomQuartier("");
+  }
+
+  function updateCustomQuartier(value: string) {
+    setCustomQuartier(value);
+    setErrors((current) => ({
+      ...current,
+      quartier: undefined,
+      submit: undefined,
+    }));
+  }
+
   function selectVehicle(vehicle: BookingPayload["vehicle"]) {
     setForm((current) => ({
       ...current,
@@ -110,10 +126,28 @@ export function BookingForm() {
       service: undefined,
       submit: undefined,
     }));
+    setStep(2);
+  }
+
+  function selectService(service: BookingPayload["service"]) {
+    update("service", service);
+    setStep(3);
   }
 
   function goTo(nextStep: number) {
     if (nextStep > step && !validateStep(step)) return;
+    setStep(nextStep);
+  }
+
+  function canNavigateToStep(nextStep: number) {
+    if (nextStep === 1) return true;
+    if (nextStep === 2) return Boolean(form.vehicle);
+    if (nextStep === 3) return Boolean(form.vehicle && form.service);
+    return false;
+  }
+
+  function goToProgressStep(nextStep: number) {
+    if (!canNavigateToStep(nextStep) || nextStep === step) return;
     setStep(nextStep);
   }
 
@@ -137,6 +171,9 @@ export function BookingForm() {
       }
       if (!form.quartier?.trim()) {
         nextErrors.quartier = "Veuillez choisir un quartier";
+      }
+      if (form.quartier === "Autre" && !customQuartier.trim()) {
+        nextErrors.quartier = "Veuillez entrer votre quartier";
       }
       if (!form.date) nextErrors.date = "Veuillez choisir une date";
       if (!form.time) nextErrors.time = "Veuillez choisir un créneau";
@@ -192,13 +229,22 @@ export function BookingForm() {
           équipe vous appellera bientôt pour confirmer le rendez-vous.
         </p>
         <RecapCard booking={finalBooking} />
+        <div className="ty-actions">
+          <a className="btn btn-outline btn-home" href="/">
+            Retour à l'accueil
+          </a>
+        </div>
       </section>
     );
   }
 
   return (
     <section className="booking-flow" aria-label="Réservation lavage voiture">
-      <Progress step={step} />
+      <Progress
+        canNavigateToStep={canNavigateToStep}
+        onStepSelect={goToProgressStep}
+        step={step}
+      />
 
       {step === 1 ? (
         <div className="step-content">
@@ -231,16 +277,6 @@ export function BookingForm() {
             ))}
           </div>
           <FieldError message={errors.vehicle} />
-          <div className="nav-buttons">
-            <button
-              className="btn btn-primary"
-              type="button"
-              disabled={!form.vehicle}
-              onClick={() => goTo(2)}
-            >
-              Continuer
-            </button>
-          </div>
           <Reassurance items={["📍 Marrakech", "📞 Confirmation par appel", "💳 Paiement sur place"]} />
         </div>
       ) : null}
@@ -268,7 +304,7 @@ export function BookingForm() {
                   type="button"
                   aria-disabled={isUnavailable}
                   aria-pressed={form.service === key}
-                  onClick={() => update("service", key)}
+                  onClick={() => selectService(key)}
                 >
                   {"badge" in service && service.badge ? (
                     <span className="badge">{service.badge}</span>
@@ -301,14 +337,6 @@ export function BookingForm() {
           <div className="nav-buttons">
             <button className="btn btn-outline" type="button" onClick={() => goTo(1)}>
               ←
-            </button>
-            <button
-              className="btn btn-primary"
-              type="button"
-              disabled={!form.service}
-              onClick={() => goTo(3)}
-            >
-              Continuer
             </button>
           </div>
         </div>
@@ -351,7 +379,7 @@ export function BookingForm() {
               className={errors.quartier ? "input-error" : ""}
               id="quartier"
               value={form.quartier ?? ""}
-              onChange={(event) => update("quartier", event.target.value)}
+              onChange={(event) => updateQuartier(event.target.value)}
             >
               <option value="">Choisissez un quartier</option>
               {QUARTIERS.map((quartier) => (
@@ -360,6 +388,17 @@ export function BookingForm() {
                 </option>
               ))}
             </select>
+            {form.quartier === "Autre" ? (
+              <input
+                aria-label="Votre quartier"
+                className={`custom-quartier-input ${
+                  errors.quartier ? "input-error" : ""
+                }`}
+                placeholder="Ex : Sidi Ghanem"
+                value={customQuartier}
+                onChange={(event) => updateCustomQuartier(event.target.value)}
+              />
+            ) : null}
             <FieldError message={errors.quartier} />
           </div>
           <div className="datetime-group">
@@ -428,30 +467,39 @@ export function BookingForm() {
   );
 }
 
-function Progress({ step }: { step: number }) {
+function Progress({
+  canNavigateToStep,
+  onStepSelect,
+  step,
+}: {
+  canNavigateToStep: (step: number) => boolean;
+  onStepSelect: (step: number) => void;
+  step: number;
+}) {
   return (
     <div className="progress-wrap">
       <div
         className="progress-bar"
-        role="progressbar"
-        aria-label="Progression"
-        aria-valuemin={1}
-        aria-valuemax={TOTAL_STEPS}
-        aria-valuenow={Math.min(step, TOTAL_STEPS)}
+        aria-label="Étapes de réservation"
       >
         {STEP_LABELS.map((label, index) => {
           const current = index + 1;
+          const isAvailable = canNavigateToStep(current);
           return (
-            <div
+            <button
               aria-label={label}
+              aria-current={current === step ? "step" : undefined}
               className={`progress-step ${
                 current < step ? "done" : current === step ? "active" : ""
               }`}
+              disabled={!isAvailable}
               key={label}
+              onClick={() => onStepSelect(current)}
+              type="button"
             >
               <span className="progress-number">{current}</span>
               <span className="progress-name">{label}</span>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -533,6 +581,17 @@ function typedEntries<T extends object>(value: T) {
   return Object.entries(value) as {
     [K in keyof T]: [K, T[K]];
   }[keyof T][];
+}
+
+function getBookingForm(
+  form: Partial<BookingPayload>,
+  customQuartier: string,
+): Partial<BookingPayload> {
+  if (form.quartier !== "Autre") return form;
+  return {
+    ...form,
+    quartier: customQuartier.trim(),
+  };
 }
 
 function isCompleteBooking(
